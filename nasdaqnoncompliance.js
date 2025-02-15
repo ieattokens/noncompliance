@@ -33,6 +33,7 @@ function parseCSVFile(file) {
     },
   });
 }
+
 // Function to add a new row to the table
 function addRowToTable(
   tickerTableBody,
@@ -52,6 +53,7 @@ function addRowToTable(
   `;
   tickerTableBody.appendChild(newRow);
 }
+
 // Process CSV Data: Extract relevant tickers and store them in localStorage
 async function processCSVData(data) {
   const tickerTableBody = document.querySelector("#tickerTable tbody");
@@ -101,7 +103,13 @@ async function processCSVData(data) {
         if (!industryGroups[industry]) {
           industryGroups[industry] = [];
         }
-        industryGroups[industry].push(symbol);
+        industryGroups[industry].push({
+          symbol,
+          companyName: row["Issuer Name"],
+          industry,
+          market,
+          notificationDate,
+        });
 
         addRowToTable(
           tickerTableBody,
@@ -120,7 +128,7 @@ async function processCSVData(data) {
   populateIndustryDropdown(industryGroups);
 }
 
-// Store selected industry's tickers in localStorage
+// Store selected industry's tickers in localStorage and update table on selection
 function populateIndustryDropdown(industryGroups) {
   const industryDropdown = document.getElementById("industryDropdown");
   if (!industryDropdown) return;
@@ -136,15 +144,54 @@ function populateIndustryDropdown(industryGroups) {
 
   industryDropdown.addEventListener("change", function () {
     const selectedIndustry = this.value;
-    if (selectedIndustry && industryGroups[selectedIndustry]) {
+    if (selectedIndustry) {
       localStorage.setItem("selectedIndustry", selectedIndustry);
       localStorage.setItem(
         "filteredTickers",
         JSON.stringify(industryGroups[selectedIndustry])
       );
-      alert(`Selected industry: ${selectedIndustry}`);
+      updateTableView(industryGroups[selectedIndustry]);
+    } else {
+      resetTableView();
     }
   });
+}
+
+// Function to update the table view based on dropdown selection
+function updateTableView(tickerList) {
+  const tickerTableBody = document.querySelector("#tickerTable tbody");
+  if (!tickerTableBody) {
+    console.error("Error: Could not find ticker table body element.");
+    return;
+  }
+
+  tickerTableBody.innerHTML = ""; // Clear current table
+
+  tickerList.forEach(
+    ({ symbol, companyName, industry, market, notificationDate }) => {
+      addRowToTable(
+        tickerTableBody,
+        symbol,
+        companyName,
+        industry,
+        market,
+        notificationDate
+      );
+    }
+  );
+}
+
+// Function to reset the table view to show all data
+function resetTableView() {
+  const storedIndustryGroups = localStorage.getItem("industryTickers");
+  if (storedIndustryGroups) {
+    const industryGroups = JSON.parse(storedIndustryGroups);
+    let allData = [];
+    Object.values(industryGroups).forEach((list) => {
+      allData = allData.concat(list);
+    });
+    updateTableView(allData);
+  }
 }
 
 // Fetch industry data from FMP API
