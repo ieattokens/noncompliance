@@ -1,0 +1,41 @@
+body {
+  font-family: Arial, sans-serif;
+  background-color: #000; /* Set the background to black */
+  color: #fff; /* Set the text color to white for contrast */
+}
+
+input,
+button {
+  padding: 10px;
+  margin-right: 10px;
+  font-size: 16px;
+  background-color: #333; /* Dark gray background for buttons and input */
+  color: #fff; /* White text for contrast */
+  border: 1px solid #141414; /* Slightly lighter border for contrast */
+}
+
+..widget-container {
+  position: relative;
+  border: 1px solid #090909;
+  padding: 10px;
+  background-color: #000; /* Set to black to match the page background */
+  color: #fff; /* White text for contrast */
+}
+
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: #ff5c5c;
+  border: none;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}

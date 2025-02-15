@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradingView Widget Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+
+    <!-- External Scripts -->
+    <script src="https://s3.tradingview.com/tv.js" defer></script>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"
+      defer
+    ></script>
+    <script src="nasdaqnoncompliance.js" defer></script>
+    <script src="tickers.js" defer></script>
+
+    <style>
+      /* Basic Styling */
+      #widgets {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: 10px;
+        margin-top: 20px;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+
+      input,
+      button {
+        padding: 10px;
+        margin: 5px;
+        font-size: 16px;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      h1 {
+        text-align: center;
+      }
+
+      .button-container {
+        text-align: center;
+        margin-top: 20px;
+      }
+
+      /* Industry Filter Styling */
+      #industryFilter {
+        padding: 10px;
+        margin-top: 10px;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navigation Bar -->
+    <nav>
+      <a href="calendar.html">View Calendar</a>
+      <a href="technicalchart.html">View Chart</a>
+      <a href="nasdaqnoncompliance.html">Upload Non-Compliance List</a>
+    </nav>
+
+    <h1>My Stock Dashboard</h1>
+
+    <!-- Filter by Industry -->
+    <h2>Filter by Industry</h2>
+    <select id="industryFilter">
+      <option value="">Select Industry</option>
+    </select>
+
+    <!-- Buttons for managing tickers -->
+    <div class="button-container">
+      <button id="showFilteredTickers" onclick="showFilteredTickers()">
+        Show Filtered Tickers
+      </button>
+      <button id="showDefaultTickers" onclick="showDefaultTickers()">
+        Show Default Tickers
+      </button>
+      <button id="resetTickers" onclick="resetTickers()">Reset Tickers</button>
+    </div>
+
+    <!-- Input to add a new ticker -->
+    <div style="text-align: center">
+      <input type="text" id="newTicker" placeholder="Enter stock ticker" />
+      <button onclick="addTicker()">Add Ticker</button>
+    </div>
+
+    <!-- Container for TradingView Widgets -->
+    <div id="widgets"></div>
+    <div id="error-message" class="error-message"></div>
+
+    <script>
+      // On page load, display default tickers or filtered tickers from localStorage
+      window.onload = function () {
+        console.log("Dashboard page loaded.");
+
+        // Retrieve stored tickers and industry groups from localStorage
+        const storedTickers = JSON.parse(
+          localStorage.getItem("filteredTickers")
+        );
+        const storedIndustryGroups = JSON.parse(
+          localStorage.getItem("industryTickers")
+        );
+
+        // Display tickers
+        if (storedTickers && storedTickers.length > 0) {
+          createWidgets(storedTickers); // Use the filtered tickers from localStorage
+        } else {
+          createWidgets(tickers); // Fallback to default tickers
+        }
+
+        // Populate industry dropdown if available in localStorage
+        if (storedIndustryGroups) {
+          populateIndustryDropdown(storedIndustryGroups); // Populate industry dropdown from localStorage
+        }
+
+        // Add event listener to filter based on selected industry
+        document
+          .getElementById("industryFilter")
+          .addEventListener("change", function () {
+            const selectedIndustry = this.value;
+            filterWidgetsByIndustry(selectedIndustry, storedIndustryGroups);
+          });
+      };
+
+      // Function to create TradingView widgets
+      function createWidgets(tickerList) {
+        console.log("Tickers to display: ", tickerList);
+        if (!tickerList || tickerList.length === 0) {
+          console.log("No tickers found.");
+          return;
+        }
+
+        document.getElementById("widgets").innerHTML = "";
+
+        tickerList.forEach((ticker) => {
+          let widgetDiv = document.createElement("div");
+          widgetDiv.className = "widget-container";
+
+          let scriptElement = document.createElement("script");
+          scriptElement.type = "text/javascript";
+          scriptElement.innerHTML = `
+                    new TradingView.widget({
+                        "width": 400,
+                        "height": 300,
+                        "symbol": "${ticker}",
+                        "interval": "D",
+                        "timezone": "Etc/UTC",
+                        "theme": "dark",
+                        "style": "1",
+                        "locale": "en",
+                        "toolbar_bg": "#f1f3f6",
+                        "enable_publishing": false,
+                        "container_id": "tradingview_${ticker}"
+                    });
+                `;
+
+          widgetDiv.appendChild(scriptElement);
+          document.getElementById("widgets").appendChild(widgetDiv);
+        });
+      }
+
+      // Populate the industry dropdown
+      function populateIndustryDropdown(industryGroups) {
+        const industryDropdown = document.getElementById("industryFilter");
+        industryDropdown.innerHTML = `<option value="">Select Industry</option>`;
+
+        Object.keys(industryGroups).forEach((industry) => {
+          const option = document.createElement("option");
+          option.value = industry;
+          option.textContent = industry;
+          industryDropdown.appendChild(option);
+        });
+      }
+
+      // Filter widgets by selected industry
+      function filterWidgetsByIndustry(selectedIndustry, industryGroups) {
+        let filteredTickers = [];
+
+        if (selectedIndustry) {
+          filteredTickers = industryGroups[selectedIndustry].map(
+            (tickerData) => tickerData.symbol
+          );
+        } else {
+          // If no industry is selected, show all tickers
+          Object.values(industryGroups)
+            .flat()
+            .forEach((tickerData) => filteredTickers.push(tickerData.symbol));
+        }
+
+        // Create widgets for filtered tickers
+        createWidgets(filteredTickers);
+      }
+
+      // Show filtered tickers from localStorage
+      function showFilteredTickers() {
+        const storedTickers = localStorage.getItem("filteredTickers");
+
+        if (storedTickers) {
+          // Parse the stored filtered tickers and create widgets
+          const filteredTickers = JSON.parse(storedTickers);
+          if (filteredTickers.length > 0) {
+            createWidgets(filteredTickers); // Use the filtered tickers
+          } else {
+            alert("No filtered tickers found.");
+          }
+        } else {
+          alert("No filtered tickers found.");
+        }
+      }
+
+      // Show default tickers
+      function showDefaultTickers() {
+        createWidgets(tickers);
+      }
+
+      // Reset stored tickers
+      function resetTickers() {
+        localStorage.removeItem("filteredTickers");
+        alert("Filtered tickers cleared!");
+        // Clear widgets on reset
+        document.getElementById("widgets").innerHTML = "";
+        createWidgets(tickers); // Show default tickers after reset
+      }
+
+      // Add a new ticker and store it
+      function addTicker() {
+        const newTicker = document
+          .getElementById("newTicker")
+          .value.toUpperCase();
+        if (newTicker && !tickers.includes(newTicker)) {
+          tickers.push(newTicker);
+          createWidgets(tickers);
+          // Optionally save updated tickers to localStorage
+          localStorage.setItem("filteredTickers", JSON.stringify(tickers));
+          document.getElementById("newTicker").value = "";
+        } else {
+          alert("Invalid or duplicate ticker.");
+        }
+      }
+    </script>
+  </body>
+</html>

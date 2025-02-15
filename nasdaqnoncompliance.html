@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NASDAQ Non-Compliance Upload</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <nav>
+      <a href="index.html">🏠 Home</a>
+    </nav>
+
+    <h1>Upload NASDAQ Non-Compliance CSV</h1>
+
+    <input type="file" id="fileInput" accept=".csv" />
+    <button id="uploadBtn">Upload CSV</button>
+
+    <h2>Select Industry</h2>
+    <select id="industryDropdown">
+      <option value="">Select Industry</option>
+    </select>
+
+    <h2>Filtered Tickers (Bid Price Only)</h2>
+    <table id="tickerTable">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Company Name</th>
+          <th>Industry</th>
+          <th>Market</th>
+          <th>Notification Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Filtered tickers will be dynamically inserted here -->
+      </tbody>
+    </table>
+
+    <script src="nasdaqnoncompliance.js"></script>
+  </body>
+</html>
