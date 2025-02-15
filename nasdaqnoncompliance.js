@@ -33,8 +33,26 @@ function parseCSVFile(file) {
     },
   });
 }
-
-// Process CSV Data: Extract relevant tickers and fetch industry data
+// Function to add a new row to the table
+function addRowToTable(
+  tickerTableBody,
+  symbol,
+  companyName,
+  industry,
+  market,
+  notificationDate
+) {
+  const newRow = document.createElement("tr");
+  newRow.innerHTML = `
+      <td>${symbol}</td>
+      <td>${companyName || "N/A"}</td>
+      <td>${industry || "Unknown Industry"}</td>
+      <td>${market}</td>
+      <td>${notificationDate}</td>
+  `;
+  tickerTableBody.appendChild(newRow);
+}
+// Process CSV Data: Extract relevant tickers and store them in localStorage
 async function processCSVData(data) {
   const tickerTableBody = document.querySelector("#tickerTable tbody");
   if (!tickerTableBody) {
@@ -51,10 +69,9 @@ async function processCSVData(data) {
   let industryGroups = {};
   let uniqueSymbols = new Set();
 
-  // Extract tickers for "Bid Price" deficiency
   data.forEach((row) => {
     if (row.Deficiency && row.Deficiency.trim() === "Bid Price") {
-      let symbols = row.Symbol ? row.Symbol.split(/[,;\s]+/) : []; // Handles multiple symbols
+      let symbols = row.Symbol ? row.Symbol.split(/[,;\s]+/) : [];
       symbols.forEach((symbol) => {
         symbol = symbol.trim();
         if (symbol) uniqueSymbols.add(symbol);
@@ -68,8 +85,6 @@ async function processCSVData(data) {
   }
 
   console.log("Fetching industry data for tickers:", [...uniqueSymbols]);
-
-  // Fetch industry data for all unique symbols from FMP
   let industryData = await fetchIndustryData([...uniqueSymbols]);
 
   data.forEach((row) => {
@@ -105,58 +120,7 @@ async function processCSVData(data) {
   populateIndustryDropdown(industryGroups);
 }
 
-// Fetch industry data from FMP API
-async function fetchIndustryData(symbols) {
-  let industryMap = {};
-  let batchSize = 10; // Avoids too many requests at once
-
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    let batch = symbols.slice(i, i + batchSize);
-    let url = `https://financialmodelingprep.com/api/v3/profile/${batch.join(
-      ","
-    )}?apikey=${FMP_API_KEY}`;
-
-    try {
-      let response = await fetch(url);
-      if (!response.ok)
-        throw new Error(`HTTP error! Status: ${response.status}`);
-
-      let data = await response.json();
-
-      data.forEach((stock) => {
-        if (stock.symbol && stock.industry) {
-          industryMap[stock.symbol] = stock.industry;
-        }
-      });
-    } catch (error) {
-      console.error("Error fetching industry data from FMP:", error);
-    }
-  }
-
-  return industryMap;
-}
-
-// Function to add a new row to the table
-function addRowToTable(
-  tickerTableBody,
-  symbol,
-  companyName,
-  industry,
-  market,
-  notificationDate
-) {
-  const newRow = document.createElement("tr");
-  newRow.innerHTML = `
-      <td>${symbol}</td>
-      <td>${companyName || "N/A"}</td>
-      <td>${industry || "Unknown Industry"}</td>
-      <td>${market}</td>
-      <td>${notificationDate}</td>
-  `;
-  tickerTableBody.appendChild(newRow);
-}
-
-// Populate the industry dropdown based on stored data
+// Store selected industry's tickers in localStorage
 function populateIndustryDropdown(industryGroups) {
   const industryDropdown = document.getElementById("industryDropdown");
   if (!industryDropdown) return;
@@ -183,10 +147,32 @@ function populateIndustryDropdown(industryGroups) {
   });
 }
 
-// Load stored industry data into dropdown on page load
-function loadIndustryDropdown() {
-  const industryGroups = JSON.parse(localStorage.getItem("industryTickers"));
-  if (industryGroups) {
-    populateIndustryDropdown(industryGroups);
+// Fetch industry data from FMP API
+async function fetchIndustryData(symbols) {
+  let industryMap = {};
+  let batchSize = 10;
+
+  for (let i = 0; i < symbols.length; i += batchSize) {
+    let batch = symbols.slice(i, i + batchSize);
+    let url = `https://financialmodelingprep.com/api/v3/profile/${batch.join(
+      ","
+    )}?apikey=${FMP_API_KEY}`;
+
+    try {
+      let response = await fetch(url);
+      if (!response.ok)
+        throw new Error(`HTTP error! Status: ${response.status}`);
+
+      let data = await response.json();
+      data.forEach((stock) => {
+        if (stock.symbol && stock.industry) {
+          industryMap[stock.symbol] = stock.industry;
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching industry data from FMP:", error);
+    }
   }
+
+  return industryMap;
 }
