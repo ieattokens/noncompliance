@@ -1,5 +1,14 @@
 const FMP_API_KEY = "4de2799ba0f90cbd498df562125c39bb"; // Your API Key
 
+// Function to load stored industry dropdown on page load
+function loadIndustryDropdown() {
+  const storedIndustryGroups = localStorage.getItem("industryTickers");
+  if (storedIndustryGroups) {
+    const industryGroups = JSON.parse(storedIndustryGroups);
+    populateIndustryDropdown(industryGroups);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   const fileInput = document.getElementById("fileInput");
   const uploadBtn = document.getElementById("uploadBtn");
