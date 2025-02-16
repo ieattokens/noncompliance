@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TradingView Widget Dashboard</title>
     <link rel="stylesheet" href="style.css" />
-
-    <!-- External Scripts -->
     <script src="https://s3.tradingview.com/tv.js" defer></script>
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"
@@ -14,9 +12,7 @@
     ></script>
     <script src="nasdaqnoncompliance.js" defer></script>
     <script src="tickers.js" defer></script>
-
     <style>
-      /* Basic Styling */
       #widgets {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
@@ -25,52 +21,53 @@
         max-height: 80vh;
         overflow-y: auto;
       }
-
       input,
       button {
         padding: 10px;
-        margin: 5px;
+        margin-right: 10px;
         font-size: 16px;
       }
-
       button {
         cursor: pointer;
       }
-
       h1 {
         text-align: center;
       }
-
+      .widget-container {
+        position: relative;
+        padding: 10px;
+      }
+      .close-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        border: none;
+        font-size: 14px;
+        cursor: pointer;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+      }
       .button-container {
         text-align: center;
         margin-top: 20px;
       }
-
-      /* Industry Filter Styling */
-      #industryFilter {
-        padding: 10px;
-        margin-top: 10px;
-        font-size: 16px;
-      }
     </style>
   </head>
   <body>
-    <!-- Navigation Bar -->
     <nav>
       <a href="calendar.html">View Calendar</a>
       <a href="technicalchart.html">View Chart</a>
-      <a href="nasdaqnoncompliance.html">Upload Non-Compliance List</a>
+      <a href="nasdaqnoncompliance.html">View Nasdaq Noncompliance</a>
+      <a href="filtered_stock_dashboard.html">View furtherfilter</a>
     </nav>
 
     <h1>My Stock Dashboard</h1>
 
-    <!-- Filter by Industry -->
-    <h2>Filter by Industry</h2>
-    <select id="industryFilter">
-      <option value="">Select Industry</option>
-    </select>
-
-    <!-- Buttons for managing tickers -->
     <div class="button-container">
       <button id="showFilteredTickers" onclick="showFilteredTickers()">
         Show Filtered Tickers
@@ -78,167 +75,178 @@
       <button id="showDefaultTickers" onclick="showDefaultTickers()">
         Show Default Tickers
       </button>
-      <button id="resetTickers" onclick="resetTickers()">Reset Tickers</button>
+      <button onclick="saveTickers()">Save Ticker List</button>
+      <button onclick="loadSavedTickers()">Load Saved Ticker List</button>
+      <button onclick="fetchAndFilterStocks()">Fetch and Filter Stocks</button>
+      <!-- Added fetch button -->
     </div>
 
-    <!-- Input to add a new ticker -->
     <div style="text-align: center">
       <input type="text" id="newTicker" placeholder="Enter stock ticker" />
       <button onclick="addTicker()">Add Ticker</button>
     </div>
 
-    <!-- Container for TradingView Widgets -->
     <div id="widgets"></div>
     <div id="error-message" class="error-message"></div>
 
     <script>
-      // On page load, display default tickers or filtered tickers from localStorage
       window.onload = function () {
         console.log("Dashboard page loaded.");
 
-        // Retrieve stored tickers and industry groups from localStorage
-        const storedTickers = JSON.parse(
-          localStorage.getItem("filteredTickers")
-        );
-        const storedIndustryGroups = JSON.parse(
-          localStorage.getItem("industryTickers")
-        );
+        // Debugging LocalStorage retrieval
+        let storedTickers = localStorage.getItem("filteredTickers");
+        let selectedIndustry = localStorage.getItem("selectedIndustry");
 
-        // Display tickers
-        if (storedTickers && storedTickers.length > 0) {
-          createWidgets(storedTickers); // Use the filtered tickers from localStorage
+        console.log("Filtered Tickers on Index Page:", storedTickers);
+        console.log("Selected Industry on Index Page:", selectedIndustry);
+
+        if (storedTickers) {
+          try {
+            let parsedTickers = JSON.parse(storedTickers);
+            console.log("Parsed stored tickers:", parsedTickers);
+
+            // Extract ticker symbols from the object array
+            let tickerSymbols = parsedTickers.map((ticker) => ticker.symbol);
+
+            console.log(
+              "Creating widgets for stored ticker symbols:",
+              tickerSymbols
+            );
+
+            createWidgets(tickerSymbols); // Pass extracted symbols
+          } catch (error) {
+            console.error("Error parsing stored tickers:", error);
+          }
         } else {
-          createWidgets(tickers); // Fallback to default tickers
+          console.log("No stored tickers found, using default.");
+          createWidgets(tickers); // Show default tickers if none are stored
         }
-
-        // Populate industry dropdown if available in localStorage
-        if (storedIndustryGroups) {
-          populateIndustryDropdown(storedIndustryGroups); // Populate industry dropdown from localStorage
-        }
-
-        // Add event listener to filter based on selected industry
-        document
-          .getElementById("industryFilter")
-          .addEventListener("change", function () {
-            const selectedIndustry = this.value;
-            filterWidgetsByIndustry(selectedIndustry, storedIndustryGroups);
-          });
       };
 
-      // Function to create TradingView widgets
       function createWidgets(tickerList) {
-        console.log("Tickers to display: ", tickerList);
         if (!tickerList || tickerList.length === 0) {
-          console.log("No tickers found.");
+          console.log("No tickers found to create widgets.");
           return;
         }
 
         document.getElementById("widgets").innerHTML = "";
+        document.getElementById("error-message").innerHTML = "";
 
-        tickerList.forEach((ticker) => {
+        tickerList.forEach((ticker, index) => {
           let widgetDiv = document.createElement("div");
           widgetDiv.className = "widget-container";
+          widgetDiv.id = `widget_${index}`;
+
+          let closeButton = document.createElement("button");
+          closeButton.className = "close-btn";
+          closeButton.innerHTML = "&times;";
+          closeButton.onclick = function () {
+            removeTicker(index);
+          };
+          widgetDiv.appendChild(closeButton);
+
+          document.getElementById("widgets").appendChild(widgetDiv);
 
           let scriptElement = document.createElement("script");
           scriptElement.type = "text/javascript";
           scriptElement.innerHTML = `
-                    new TradingView.widget({
-                        "width": 400,
-                        "height": 300,
-                        "symbol": "${ticker}",
-                        "interval": "D",
-                        "timezone": "Etc/UTC",
-                        "theme": "dark",
-                        "style": "1",
-                        "locale": "en",
-                        "toolbar_bg": "#f1f3f6",
-                        "enable_publishing": false,
-                        "container_id": "tradingview_${ticker}"
-                    });
-                `;
-
+            new TradingView.widget({
+              "width": 400,
+              "height": 300,
+              "symbol": "${ticker}",
+              "interval": "D",
+              "timezone": "Etc/UTC",
+              "theme": "dark",
+              "style": "1",
+              "locale": "en",
+              "toolbar_bg": "#f1f3f6",
+              "enable_publishing": false,
+              "hide_legend": false,
+              "save_image": false,
+              "studies": ["Volume@tv-basicstudies", "RSI@tv-basicstudies"],
+              "container_id": "tradingview_${ticker}"
+            });
+          `;
           widgetDiv.appendChild(scriptElement);
-          document.getElementById("widgets").appendChild(widgetDiv);
         });
       }
 
-      // Populate the industry dropdown
-      function populateIndustryDropdown(industryGroups) {
-        const industryDropdown = document.getElementById("industryFilter");
-        industryDropdown.innerHTML = `<option value="">Select Industry</option>`;
-
-        Object.keys(industryGroups).forEach((industry) => {
-          const option = document.createElement("option");
-          option.value = industry;
-          option.textContent = industry;
-          industryDropdown.appendChild(option);
-        });
-      }
-
-      // Filter widgets by selected industry
-      function filterWidgetsByIndustry(selectedIndustry, industryGroups) {
-        let filteredTickers = [];
-
-        if (selectedIndustry) {
-          filteredTickers = industryGroups[selectedIndustry].map(
-            (tickerData) => tickerData.symbol
-          );
-        } else {
-          // If no industry is selected, show all tickers
-          Object.values(industryGroups)
-            .flat()
-            .forEach((tickerData) => filteredTickers.push(tickerData.symbol));
-        }
-
-        // Create widgets for filtered tickers
-        createWidgets(filteredTickers);
-      }
-
-      // Show filtered tickers from localStorage
       function showFilteredTickers() {
         const storedTickers = localStorage.getItem("filteredTickers");
-
         if (storedTickers) {
-          // Parse the stored filtered tickers and create widgets
           const filteredTickers = JSON.parse(storedTickers);
-          if (filteredTickers.length > 0) {
-            createWidgets(filteredTickers); // Use the filtered tickers
-          } else {
-            alert("No filtered tickers found.");
-          }
+          createWidgets(filteredTickers);
         } else {
           alert("No filtered tickers found.");
         }
       }
 
-      // Show default tickers
       function showDefaultTickers() {
         createWidgets(tickers);
       }
 
-      // Reset stored tickers
-      function resetTickers() {
-        localStorage.removeItem("filteredTickers");
-        alert("Filtered tickers cleared!");
-        // Clear widgets on reset
-        document.getElementById("widgets").innerHTML = "";
-        createWidgets(tickers); // Show default tickers after reset
-      }
-
-      // Add a new ticker and store it
-      function addTicker() {
+      window.addTicker = function () {
         const newTicker = document
           .getElementById("newTicker")
           .value.toUpperCase();
         if (newTicker && !tickers.includes(newTicker)) {
           tickers.push(newTicker);
           createWidgets(tickers);
-          // Optionally save updated tickers to localStorage
-          localStorage.setItem("filteredTickers", JSON.stringify(tickers));
           document.getElementById("newTicker").value = "";
+        } else if (tickers.includes(newTicker)) {
+          alert("Ticker already exists.");
         } else {
-          alert("Invalid or duplicate ticker.");
+          alert("Please enter a valid ticker symbol.");
         }
+      };
+
+      window.removeTicker = function (index) {
+        tickers.splice(index, 1);
+        createWidgets(tickers);
+      };
+
+      // Save the current ticker list to localStorage
+      function saveTickers() {
+        localStorage.setItem("savedTickers", JSON.stringify(tickers));
+        alert("Ticker list saved!");
+      }
+
+      // Load saved ticker list from localStorage
+      function loadSavedTickers() {
+        const savedTickers = localStorage.getItem("savedTickers");
+        if (savedTickers) {
+          const tickerList = JSON.parse(savedTickers);
+          createWidgets(tickerList);
+        } else {
+          alert("No saved ticker list found.");
+        }
+      }
+
+      // Fetch stock data from the backend and filter based on criteria
+      function fetchAndFilterStocks() {
+        const tickers = "AAPL,MSFT,GOOGL"; // Replace with tickers you want to check
+        fetch(
+          `https://secure-island-42510-64a822da885b.herokuapp.com/api/stocks?symbols=${tickers}`
+        )
+          .then((response) => response.json())
+          .then((data) => {
+            const filteredStocks = filterStocks(data);
+            console.log(filteredStocks); // Display or process the filtered stocks
+            createWidgets(filteredStocks); // Show the filtered stocks as widgets
+          })
+          .catch((error) => console.error("Error fetching stock data:", error));
+      }
+
+      // Function to filter stocks based on price and volume criteria
+      function filterStocks(stocks) {
+        return stocks.filter((stock) => {
+          const price = parseFloat(stock["price"]);
+          const low = parseFloat(stock["52weekLow"]);
+          const volume = parseInt(stock["volume"]);
+          const avgVolume = parseInt(stock["averageVolume"]);
+
+          return price < 1 && price > low * 1.1 && volume > avgVolume * 1.2;
+        });
       }
     </script>
   </body>
