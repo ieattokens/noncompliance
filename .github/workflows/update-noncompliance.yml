@@ -16,8 +16,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: master
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -41,5 +39,5 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Update noncompliance data $(date +%Y-%m-%d)"
-            git push
+            git push origin HEAD
           fi
