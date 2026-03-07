@@ -12,10 +12,17 @@
       <a href="index.html">Home</a>
     </nav>
 
-    <h1>Upload NASDAQ Non-Compliance CSV</h1>
+    <h1>NASDAQ Non-Compliance</h1>
 
-    <input type="file" id="fileInput" accept=".csv" />
-    <button id="uploadBtn">Upload CSV</button>
+    <div id="autoLoadStatus" style="text-align:center; padding: 10px; margin: 10px 0; border-radius: 6px; font-size: 15px;"></div>
+
+    <details id="manualUploadSection" style="margin: 10px 0; padding: 10px;">
+      <summary style="cursor:pointer; font-weight:bold;">Upload CSV manually (optional)</summary>
+      <div style="margin-top: 8px;">
+        <input type="file" id="fileInput" accept=".csv" />
+        <button id="uploadBtn">Upload CSV</button>
+      </div>
+    </details>
 
     <h2>Select Industry</h2>
     <select id="industryDropdown">
