@@ -9,6 +9,46 @@ function loadIndustryDropdown() {
   }
 }
 
+function setStatus(message, color) {
+  const el = document.getElementById("autoLoadStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.style.backgroundColor = color === "green" ? "#d4edda" : color === "red" ? "#f8d7da" : "#fff3cd";
+  el.style.color = color === "green" ? "#155724" : color === "red" ? "#721c24" : "#856404";
+  el.style.border = `1px solid ${color === "green" ? "#c3e6cb" : color === "red" ? "#f5c6cb" : "#ffeeba"}`;
+}
+
+// Try to load noncompliance.csv committed to the repo (auto-updated by GitHub Actions)
+async function autoLoadCSV() {
+  setStatus("Loading latest data...", "yellow");
+  try {
+    const response = await fetch("./noncompliance.csv");
+    if (!response.ok) {
+      setStatus("No auto-loaded data yet. Use the manual upload below, or wait for the daily refresh to run.", "yellow");
+      return;
+    }
+
+    const lastModified = response.headers.get("Last-Modified");
+    const dateStr = lastModified
+      ? new Date(lastModified).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+      : "recently";
+
+    const text = await response.text();
+    const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+
+    if (result.data && result.data.length > 0) {
+      await processCSVData(result.data);
+      setStatus(`Data loaded automatically. Last updated: ${dateStr}`, "green");
+      const uploadSection = document.getElementById("manualUploadSection");
+      if (uploadSection) uploadSection.style.display = "none";
+    } else {
+      setStatus("Auto-loaded file appears empty. Try uploading manually.", "red");
+    }
+  } catch (e) {
+    setStatus("Could not auto-load data. Use the manual upload below.", "yellow");
+  }
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   const fileInput = document.getElementById("fileInput");
   const uploadBtn = document.getElementById("uploadBtn");
@@ -25,7 +65,13 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  loadIndustryDropdown();
+  // First try auto-loading the committed CSV; fall back to localStorage
+  autoLoadCSV().then(() => {
+    const status = document.getElementById("autoLoadStatus");
+    if (!status || !status.textContent.includes("automatically")) {
+      loadIndustryDropdown();
+    }
+  });
 });
 
 // Function to parse the uploaded CSV file

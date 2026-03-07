@@ -1,0 +1,45 @@
+name: Update NASDAQ Noncompliance Data
+
+on:
+  schedule:
+    # Runs at 10pm UTC on weekdays (after US market close)
+    - cron: '0 22 * * 1-5'
+  workflow_dispatch: # Allows you to run it manually from GitHub
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests playwright
+          playwright install chromium
+
+      - name: Download noncompliance data
+        run: python scripts/download_noncompliance.py
+
+      - name: Commit and push if data changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add noncompliance.csv
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update noncompliance data $(date +%Y-%m-%d)"
+            git push
+          fi
