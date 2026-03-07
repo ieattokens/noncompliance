@@ -26,6 +26,19 @@ BROWSER_HEADERS = {
     "Connection": "keep-alive",
 }
 
+# API endpoints to try in order (the compliance path changed; try several candidates)
+API_ENDPOINTS = [
+    "https://api.nasdaq.com/api/compliance/non-compliant-company-list",
+    "https://api.nasdaq.com/api/company/non-compliant-company-list",
+    "https://api.nasdaq.com/api/screenerfiled/non-compliant-company-list",
+]
+
+# Listing center pages to try via Playwright in order
+LISTING_CENTER_URLS = [
+    "https://listingcenter.nasdaq.com/noncompliantcompanylist.aspx",
+    "https://listingcenter.nasdaq.com/IssuersPendingSuspensionDelisting.aspx",
+]
+
 # Column names the website expects
 CSV_COLUMNS = ["Symbol", "Issuer Name", "Market", "Deficiency", "Notification Date"]
 
@@ -67,50 +80,52 @@ def try_requests_download():
     except Exception as e:
         print(f"  Could not visit main page: {e}")
 
-    print("Requesting NASDAQ API...")
-    try:
-        response = session.get(
-            "https://api.nasdaq.com/api/compliance/non-compliant-company-list",
-            params={"tableonly": "true", "limit": "25", "offset": "0", "download": "true"},
-            headers={
-                **BROWSER_HEADERS,
-                "Accept": "application/json, text/plain, */*",
-                "Referer": "https://www.nasdaq.com/",
-            },
-            timeout=20,
-        )
-    except Exception as e:
-        print(f"  Request failed: {e}")
-        return False
+    for endpoint in API_ENDPOINTS:
+        print(f"Requesting {endpoint} ...")
+        try:
+            response = session.get(
+                endpoint,
+                params={"tableonly": "true", "limit": "25", "offset": "0", "download": "true"},
+                headers={
+                    **BROWSER_HEADERS,
+                    "Accept": "application/json, text/plain, */*",
+                    "Referer": "https://www.nasdaq.com/",
+                },
+                timeout=20,
+            )
+        except Exception as e:
+            print(f"  Request failed: {e}")
+            continue
 
-    print(f"  Status: {response.status_code}")
-    if response.status_code != 200:
-        return False
+        print(f"  Status: {response.status_code}")
+        if response.status_code != 200:
+            continue
 
-    content_type = response.headers.get("content-type", "")
-    print(f"  Content-Type: {content_type}")
+        content_type = response.headers.get("content-type", "")
+        print(f"  Content-Type: {content_type}")
 
-    # If NASDAQ returns a raw CSV, save it directly
-    if "csv" in content_type or "text/plain" in content_type:
-        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            f.write(response.text)
-        print(f"  Saved CSV directly ({len(response.text)} bytes)")
-        return True
+        # If NASDAQ returns a raw CSV, save it directly
+        if "csv" in content_type or "text/plain" in content_type:
+            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+                f.write(response.text)
+            print(f"  Saved CSV directly ({len(response.text)} bytes)")
+            return True
 
-    # Otherwise try to parse JSON
-    try:
-        data = response.json()
-    except Exception as e:
-        print(f"  Could not parse JSON: {e}")
-        return False
+        # Otherwise try to parse JSON
+        try:
+            data = response.json()
+        except Exception as e:
+            print(f"  Could not parse JSON: {e}")
+            continue
 
-    print(f"  JSON top-level keys: {list(data.keys())}")
-    rows = extract_rows(data)
-    if rows:
-        save_rows(rows)
-        return True
+        print(f"  JSON top-level keys: {list(data.keys())}")
+        rows = extract_rows(data)
+        if rows:
+            save_rows(rows)
+            return True
 
-    print("  Could not find row data in JSON response")
+        print("  Could not find row data in JSON response")
+
     return False
 
 
@@ -160,19 +175,25 @@ def try_playwright_download():
         return False
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # --disable-http2 prevents ERR_HTTP2_PROTOCOL_ERROR on sites with broken HTTP/2 support
+        browser = p.chromium.launch(headless=True, args=["--disable-http2"])
         context = browser.new_context(
             user_agent=BROWSER_HEADERS["User-Agent"],
             accept_downloads=True,
         )
         page = context.new_page()
 
-        url = "https://listingcenter.nasdaq.com/noncompliantcompanylist.aspx"
-        print(f"  Opening {url} ...")
-        try:
-            page.goto(url, timeout=30000, wait_until="networkidle")
-        except Exception as e:
-            print(f"  Page load error: {e}")
+        loaded = False
+        for url in LISTING_CENTER_URLS:
+            print(f"  Opening {url} ...")
+            try:
+                page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                loaded = True
+                break
+            except Exception as e:
+                print(f"  Page load error: {e}")
+
+        if not loaded:
             browser.close()
             return False
 
