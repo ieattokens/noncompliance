@@ -33,8 +33,10 @@ API_ENDPOINTS = [
     "https://api.nasdaq.com/api/screenerfiled/non-compliant-company-list",
 ]
 
-# Listing center pages to try via Playwright in order
-LISTING_CENTER_URLS = [
+# Pages to try via Playwright in order.
+# The nasdaq.com page is the primary target; listing center pages are fallbacks.
+PLAYWRIGHT_URLS = [
+    "https://www.nasdaq.com/market-activity/stocks/non-compliant-company-list",
     "https://listingcenter.nasdaq.com/noncompliantcompanylist.aspx",
     "https://listingcenter.nasdaq.com/IssuersPendingSuspensionDelisting.aspx",
 ]
@@ -165,8 +167,14 @@ def save_rows(rows):
 
 def try_playwright_download():
     """
-    Fallback: launch a real browser to find and click the CSV download button.
-    This works even when the API is blocked, because it behaves like a real user.
+    Fallback: launch a real browser and intercept the API response as the page loads.
+
+    For nasdaq.com (a React SPA), we capture the XHR/fetch call that populates
+    the noncompliance table — no need to find a download button.  The endpoint
+    URL may change at any time; interception works regardless.
+
+    For listing-center pages (ASPX, server-rendered), we fall back to clicking
+    a download button if interception yields nothing.
     """
     try:
         from playwright.sync_api import sync_playwright
@@ -175,7 +183,7 @@ def try_playwright_download():
         return False
 
     with sync_playwright() as p:
-        # --disable-http2 prevents ERR_HTTP2_PROTOCOL_ERROR on sites with broken HTTP/2 support
+        # --disable-http2 prevents ERR_HTTP2_PROTOCOL_ERROR on sites with broken HTTP/2
         browser = p.chromium.launch(headless=True, args=["--disable-http2"])
         context = browser.new_context(
             user_agent=BROWSER_HEADERS["User-Agent"],
@@ -183,56 +191,80 @@ def try_playwright_download():
         )
         page = context.new_page()
 
-        loaded = False
-        for url in LISTING_CENTER_URLS:
+        # Collect every api.nasdaq.com JSON response that arrives while the page loads
+        captured: list = []
+
+        def on_response(response):
+            if "api.nasdaq.com" not in response.url:
+                return
+            if response.status != 200:
+                return
+            try:
+                data = response.json()
+                captured.append((response.url, data))
+                print(f"  Intercepted API call: {response.url}")
+            except Exception:
+                pass
+
+        page.on("response", on_response)
+
+        for url in PLAYWRIGHT_URLS:
+            captured.clear()
             print(f"  Opening {url} ...")
             try:
                 page.goto(url, timeout=60000, wait_until="domcontentloaded")
-                loaded = True
-                break
+                # Give the SPA a moment to fire its data requests
+                try:
+                    page.wait_for_load_state("networkidle", timeout=20000)
+                except Exception:
+                    pass  # networkidle timeout is non-fatal
             except Exception as e:
                 print(f"  Page load error: {e}")
+                continue
 
-        if not loaded:
-            browser.close()
-            return False
+            print(f"  Page title: {page.title()}")
 
-        print(f"  Page title: {page.title()}")
+            # --- Strategy 1: use an intercepted API response ---
+            for api_url, data in captured:
+                rows = extract_rows(data)
+                if rows:
+                    print(f"  Got {len(rows)} rows from intercepted call: {api_url}")
+                    save_rows(rows)
+                    browser.close()
+                    return True
 
-        # Selectors to try for the download button, in order of likelihood
-        selectors = [
-            "text=Download",
-            "text=Export to CSV",
-            "text=Export CSV",
-            "text=Download CSV",
-            "button:has-text('Download')",
-            "a:has-text('Download')",
-            "button:has-text('CSV')",
-            "a:has-text('CSV')",
-            "[title*='Download']",
-            "[title*='Export']",
-            "input[value*='Download']",
-        ]
+            # --- Strategy 2: click a download button (listing-center pages) ---
+            selectors = [
+                "text=Download",
+                "text=Export to CSV",
+                "text=Export CSV",
+                "text=Download CSV",
+                "button:has-text('Download')",
+                "a:has-text('Download')",
+                "button:has-text('CSV')",
+                "a:has-text('CSV')",
+                "[title*='Download']",
+                "[title*='Export']",
+                "input[value*='Download']",
+            ]
+            for selector in selectors:
+                try:
+                    if page.locator(selector).count() == 0:
+                        continue
+                    print(f"  Trying selector: {selector}")
+                    with page.expect_download(timeout=15000) as dl_info:
+                        page.click(selector, timeout=5000)
+                    dl_info.value.save_as(OUTPUT_FILE)
+                    print(f"  Downloaded! (selector: {selector})")
+                    browser.close()
+                    return True
+                except Exception as e:
+                    print(f"    Failed: {e}")
 
-        for selector in selectors:
-            try:
-                if page.locator(selector).count() == 0:
-                    continue
-                print(f"  Trying selector: {selector}")
-                with page.expect_download(timeout=15000) as dl_info:
-                    page.click(selector, timeout=5000)
-                dl = dl_info.value
-                dl.save_as(OUTPUT_FILE)
-                print(f"  Downloaded! (selector: {selector})")
-                browser.close()
-                return True
-            except Exception as e:
-                print(f"    Failed: {e}")
-
-        # Log buttons found so user can debug if needed
-        print("\n  Buttons/links found on page (for debugging):")
-        for el in page.locator("button, a").all()[:25]:
-            print(f"    '{el.inner_text()[:60].strip()}'")
+            # Log what's on the page for debugging
+            print("  No data found. Buttons/links on page:")
+            for el in page.locator("button, a").all()[:20]:
+                print(f"    '{el.inner_text()[:60].strip()}'")
 
         browser.close()
         return False
