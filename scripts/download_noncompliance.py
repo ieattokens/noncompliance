@@ -186,11 +186,23 @@ def try_playwright_download():
         return False
 
     with sync_playwright() as p:
-        # --disable-http2 prevents ERR_HTTP2_PROTOCOL_ERROR on sites with broken HTTP/2
-        browser = p.chromium.launch(headless=True, args=["--disable-http2"])
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-http2",
+                # Suppress headless-browser signals that Akamai Bot Manager checks
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+            ],
+        )
         context = browser.new_context(
             user_agent=BROWSER_HEADERS["User-Agent"],
             accept_downloads=True,
+            viewport={"width": 1280, "height": 800},
+        )
+        # Hide navigator.webdriver (another Akamai/bot-detection signal)
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )
         page = context.new_page()
 
@@ -221,6 +233,18 @@ def try_playwright_download():
                     page.wait_for_load_state("networkidle", timeout=20000)
                 except Exception:
                     pass  # networkidle timeout is non-fatal
+
+                # Wait for the table to actually populate (SPA renders data async)
+                for table_sel in [
+                    ".jupiter22-c-listing-pages__table tr",
+                    "table tr",
+                    ".jupiter22-c-listing-pages__download",
+                ]:
+                    try:
+                        page.wait_for_selector(table_sel, timeout=10000)
+                        break
+                    except Exception:
+                        pass
             except Exception as e:
                 print(f"  Page load error: {e}")
                 continue
