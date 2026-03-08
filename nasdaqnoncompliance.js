@@ -1,5 +1,34 @@
 const FMP_API_KEY = "4de2799ba0f90cbd498df562125c39bb"; // Your API Key
 
+async function checkGithubRefreshStatus() {
+  const el = document.getElementById("githubStatus");
+  if (!el) return;
+  try {
+    const res = await fetch(
+      "https://api.github.com/repos/ieattokens/noncompliance/actions/runs?per_page=1&status=completed",
+      { headers: { Accept: "application/vnd.github+json" } }
+    );
+    if (!res.ok) throw new Error("API error");
+    const data = await res.json();
+    const run = data.workflow_runs && data.workflow_runs[0];
+    if (!run) {
+      el.textContent = "No workflow runs found yet.";
+      return;
+    }
+    const when = new Date(run.updated_at).toLocaleString("en-US", {
+      month: "short", day: "numeric", year: "numeric",
+      hour: "numeric", minute: "2-digit", timeZoneName: "short"
+    });
+    const success = run.conclusion === "success";
+    el.textContent = `Last auto-refresh: ${when} — ${success ? "✓ Succeeded" : "✗ Failed (check GitHub Actions)"}`;
+    el.style.background = success ? "#d4edda" : "#f8d7da";
+    el.style.color = success ? "#155724" : "#721c24";
+    el.style.borderColor = success ? "#c3e6cb" : "#f5c6cb";
+  } catch (e) {
+    el.textContent = "Could not fetch refresh status from GitHub.";
+  }
+}
+
 // Function to load stored industry dropdown on page load
 function loadIndustryDropdown() {
   const storedIndustryGroups = localStorage.getItem("industryTickers");
@@ -64,6 +93,8 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
   }
+
+  checkGithubRefreshStatus();
 
   // First try auto-loading the committed CSV; fall back to localStorage
   autoLoadCSV().then(() => {
