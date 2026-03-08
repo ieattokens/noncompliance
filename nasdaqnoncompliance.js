@@ -287,9 +287,9 @@ async function fetchIndustryData(symbols) {
 
   for (let i = 0; i < symbols.length; i += batchSize) {
     let batch = symbols.slice(i, i + batchSize);
-    let url = `https://financialmodelingprep.com/api/v3/profile/${batch.join(
+    let url = `https://financialmodelingprep.com/stable/profile?symbol=${batch.join(
       ","
-    )}?apikey=${FMP_API_KEY}`;
+    )}&apikey=${FMP_API_KEY}`;
 
     try {
       let response = await fetch(url);
