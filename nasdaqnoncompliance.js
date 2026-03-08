@@ -287,9 +287,9 @@ async function fetchIndustryData(symbols) {
 
   for (let i = 0; i < symbols.length; i += batchSize) {
     let batch = symbols.slice(i, i + batchSize);
-    let url = `https://financialmodelingprep.com/api/v3/profile/${batch.join(
+    let url = `https://financialmodelingprep.com/stable/profile?symbol=${batch.join(
       ","
-    )}?apikey=${FMP_API_KEY}`;
+    )}&apikey=${FMP_API_KEY}`;
 
     try {
       let response = await fetch(url);
@@ -297,6 +297,11 @@ async function fetchIndustryData(symbols) {
         throw new Error(`HTTP error! Status: ${response.status}`);
 
       let data = await response.json();
+      console.log("FMP response for batch", batch, data);
+      if (!Array.isArray(data)) {
+        console.error("FMP returned non-array response:", data);
+        continue;
+      }
       data.forEach((stock) => {
         if (stock.symbol && stock.industry) {
           industryMap[stock.symbol] = stock.industry;
