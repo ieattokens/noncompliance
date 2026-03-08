@@ -185,13 +185,35 @@ def try_playwright_download():
         print("  Playwright not installed, skipping")
         return False
 
+    CHROMIUM_ARGS = [
+        "--disable-http2",
+        "--disable-blink-features=AutomationControlled",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+    ]
+    CONTEXT_OPTS = dict(
+        user_agent=BROWSER_HEADERS["User-Agent"],
+        accept_downloads=True,
+        viewport={"width": 1280, "height": 800},
+    )
+    WEBDRIVER_HIDE = (
+        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    )
+
     with sync_playwright() as p:
-        # --disable-http2 prevents ERR_HTTP2_PROTOCOL_ERROR on sites with broken HTTP/2
-        browser = p.chromium.launch(headless=True, args=["--disable-http2"])
-        context = browser.new_context(
-            user_agent=BROWSER_HEADERS["User-Agent"],
-            accept_downloads=True,
-        )
+        # Try Firefox first — its NSS TLS stack has a different JA3 fingerprint
+        # from Chromium's BoringSSL, which Akamai Bot Manager may treat differently.
+        # Fall back to Chromium if Firefox is not installed.
+        try:
+            browser = p.firefox.launch(headless=True)
+            print("  Using Firefox")
+        except Exception as fe:
+            print(f"  Firefox unavailable ({fe}), falling back to Chromium")
+            browser = p.chromium.launch(headless=True, args=CHROMIUM_ARGS)
+            print("  Using Chromium")
+
+        context = browser.new_context(**CONTEXT_OPTS)
+        context.add_init_script(WEBDRIVER_HIDE)
         page = context.new_page()
 
         # Collect every api.nasdaq.com JSON response that arrives while the page loads
@@ -215,12 +237,24 @@ def try_playwright_download():
             captured.clear()
             print(f"  Opening {url} ...")
             try:
-                page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                page.goto(url, timeout=60000, wait_until="commit")
                 # Give the SPA a moment to fire its data requests
                 try:
                     page.wait_for_load_state("networkidle", timeout=20000)
                 except Exception:
                     pass  # networkidle timeout is non-fatal
+
+                # Wait for the table to actually populate (SPA renders data async)
+                for table_sel in [
+                    ".jupiter22-c-listing-pages__table tr",
+                    "table tr",
+                    ".jupiter22-c-listing-pages__download",
+                ]:
+                    try:
+                        page.wait_for_selector(table_sel, timeout=10000)
+                        break
+                    except Exception:
+                        pass
             except Exception as e:
                 print(f"  Page load error: {e}")
                 continue
