@@ -27,10 +27,13 @@ BROWSER_HEADERS = {
 }
 
 # API endpoints to try in order (the compliance path changed; try several candidates)
+# API endpoints to try in order.
+# The US market API moved from api.nasdaq.com to qcapi.nasdaq.com
+# (visible in window.drupalSettings.usaApiSettings.remoteHost on the page).
 API_ENDPOINTS = [
+    "https://qcapi.nasdaq.com/api/compliance/non-compliant-company-list",
     "https://api.nasdaq.com/api/compliance/non-compliant-company-list",
     "https://api.nasdaq.com/api/company/non-compliant-company-list",
-    "https://api.nasdaq.com/api/screenerfiled/non-compliant-company-list",
 ]
 
 # Pages to try via Playwright in order.
@@ -195,7 +198,7 @@ def try_playwright_download():
         captured: list = []
 
         def on_response(response):
-            if "api.nasdaq.com" not in response.url:
+            if "api.nasdaq.com" not in response.url and "qcapi.nasdaq.com" not in response.url:
                 return
             if response.status != 200:
                 return
@@ -235,6 +238,7 @@ def try_playwright_download():
 
             # --- Strategy 2: click a download button (listing-center pages) ---
             selectors = [
+                ".jupiter22-c-listing-pages__download",  # exact class from page HTML
                 "text=Download",
                 "text=Export to CSV",
                 "text=Export CSV",
