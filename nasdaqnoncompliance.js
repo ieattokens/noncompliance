@@ -297,6 +297,11 @@ async function fetchIndustryData(symbols) {
         throw new Error(`HTTP error! Status: ${response.status}`);
 
       let data = await response.json();
+      console.log("FMP response for batch", batch, data);
+      if (!Array.isArray(data)) {
+        console.error("FMP returned non-array response:", data);
+        continue;
+      }
       data.forEach((stock) => {
         if (stock.symbol && stock.industry) {
           industryMap[stock.symbol] = stock.industry;
