@@ -1,5 +1,3 @@
-const FMP_API_KEY = "4de2799ba0f90cbd498df562125c39bb"; // Your API Key
-
 async function checkGithubRefreshStatus() {
   const el = document.getElementById("githubStatus");
   if (!el) return;
@@ -280,31 +278,27 @@ function resetTableView() {
   }
 }
 
-// Fetch industry data from FMP API (batch requests, 50 symbols at a time)
+// Fetch industry data from NASDAQ screener (all listed stocks in one call)
 async function fetchIndustryData(symbols) {
+  const symbolSet = new Set(symbols);
   let industryMap = {};
-  const batchSize = 50;
 
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    const batch = symbols.slice(i, i + batchSize);
-    const url = `https://financialmodelingprep.com/stable/profile?symbols=${batch.join(",")}&apikey=${FMP_API_KEY}`;
+  try {
+    const url = "https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=25000&offset=0&download=true";
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
+    if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
 
-    try {
-      let response = await fetch(url);
-      if (!response.ok)
-        throw new Error(`HTTP error! Status: ${response.status}`);
-
-      let data = await response.json();
-      if (Array.isArray(data)) {
-        data.forEach((item) => {
-          if (item.symbol && item.industry) {
-            industryMap[item.symbol] = item.industry;
-          }
-        });
+    const data = await response.json();
+    const rows = data?.data?.rows || [];
+    rows.forEach((item) => {
+      if (symbolSet.has(item.symbol) && item.industry) {
+        industryMap[item.symbol] = item.industry;
       }
-    } catch (error) {
-      console.error("Error fetching batch industry data:", error);
-    }
+    });
+  } catch (error) {
+    console.error("Error fetching NASDAQ screener data:", error);
   }
 
   return industryMap;
