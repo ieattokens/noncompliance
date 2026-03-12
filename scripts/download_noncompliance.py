@@ -14,6 +14,7 @@ import sys
 import requests
 
 OUTPUT_FILE = "noncompliance.csv"
+INDUSTRY_FILE = "industries.json"
 
 BROWSER_HEADERS = {
     "User-Agent": (
@@ -308,17 +309,49 @@ def try_playwright_download():
         return False
 
 
+def download_industries():
+    """Fetch NASDAQ screener and save symbol->industry map as industries.json."""
+    print("Fetching NASDAQ screener for industry data...")
+    url = "https://api.nasdaq.com/api/screener/stocks"
+    params = {"tableonly": "true", "limit": "25000", "offset": "0", "download": "true"}
+    headers = {
+        **BROWSER_HEADERS,
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.nasdaq.com/",
+    }
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=30)
+        print(f"  Status: {response.status_code}")
+        response.raise_for_status()
+        data = response.json()
+        rows = data.get("data", {}).get("rows", [])
+        industry_map = {
+            row["symbol"]: row["industry"]
+            for row in rows
+            if row.get("symbol") and row.get("industry")
+        }
+        with open(INDUSTRY_FILE, "w", encoding="utf-8") as f:
+            json.dump(industry_map, f)
+        print(f"  Saved {len(industry_map)} symbols to {INDUSTRY_FILE}")
+        return True
+    except Exception as e:
+        print(f"  Failed to fetch industry data: {e}")
+        return False
+
+
 if __name__ == "__main__":
     print("=== NASDAQ Noncompliance Downloader ===\n")
 
     print("Method 1: HTTP requests")
     if try_requests_download():
         print(f"\nSuccess! Data saved to {OUTPUT_FILE}")
+        download_industries()
         sys.exit(0)
 
     print("\nMethod 1 failed. Trying Method 2: Playwright browser...\n")
     if try_playwright_download():
         print(f"\nSuccess! Data saved to {OUTPUT_FILE}")
+        download_industries()
         sys.exit(0)
 
     print("\nBoth methods failed. See output above for debugging info.")

@@ -278,27 +278,21 @@ function resetTableView() {
   }
 }
 
-// Fetch industry data from NASDAQ screener (all listed stocks in one call)
+// Fetch industry data from locally committed industries.json (no CORS issues)
 async function fetchIndustryData(symbols) {
   const symbolSet = new Set(symbols);
   let industryMap = {};
 
   try {
-    const url = "https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=25000&offset=0&download=true";
-    const response = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0" }
-    });
+    const response = await fetch("./industries.json");
     if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
 
     const data = await response.json();
-    const rows = data?.data?.rows || [];
-    rows.forEach((item) => {
-      if (symbolSet.has(item.symbol) && item.industry) {
-        industryMap[item.symbol] = item.industry;
-      }
+    symbolSet.forEach((symbol) => {
+      if (data[symbol]) industryMap[symbol] = data[symbol];
     });
   } catch (error) {
-    console.error("Error fetching NASDAQ screener data:", error);
+    console.error("Error loading industries.json:", error);
   }
 
   return industryMap;
