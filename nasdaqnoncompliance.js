@@ -280,12 +280,14 @@ function resetTableView() {
   }
 }
 
-// Fetch industry data from FMP API
+// Fetch industry data from FMP API (batch requests, 50 symbols at a time)
 async function fetchIndustryData(symbols) {
   let industryMap = {};
+  const batchSize = 50;
 
-  for (let symbol of symbols) {
-    let url = `https://financialmodelingprep.com/stable/profile?symbol=${symbol}&apikey=${FMP_API_KEY}`;
+  for (let i = 0; i < symbols.length; i += batchSize) {
+    const batch = symbols.slice(i, i + batchSize);
+    const url = `https://financialmodelingprep.com/stable/profile?symbols=${batch.join(",")}&apikey=${FMP_API_KEY}`;
 
     try {
       let response = await fetch(url);
@@ -293,11 +295,15 @@ async function fetchIndustryData(symbols) {
         throw new Error(`HTTP error! Status: ${response.status}`);
 
       let data = await response.json();
-      if (Array.isArray(data) && data.length > 0 && data[0].industry) {
-        industryMap[symbol] = data[0].industry;
+      if (Array.isArray(data)) {
+        data.forEach((item) => {
+          if (item.symbol && item.industry) {
+            industryMap[item.symbol] = item.industry;
+          }
+        });
       }
     } catch (error) {
-      console.error("Error fetching industry data for", symbol, error);
+      console.error("Error fetching batch industry data:", error);
     }
   }
 
