@@ -1,5 +1,3 @@
-const FMP_API_KEY = "4de2799ba0f90cbd498df562125c39bb"; // Your API Key
-
 async function checkGithubRefreshStatus() {
   const el = document.getElementById("githubStatus");
   if (!el) return;
@@ -280,36 +278,21 @@ function resetTableView() {
   }
 }
 
-// Fetch industry data from FMP API
+// Fetch industry data from locally committed industries.json (no CORS issues)
 async function fetchIndustryData(symbols) {
+  const symbolSet = new Set(symbols);
   let industryMap = {};
-  let batchSize = 10;
 
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    let batch = symbols.slice(i, i + batchSize);
-    let url = `https://financialmodelingprep.com/stable/profile?symbol=${batch.join(
-      ","
-    )}&apikey=${FMP_API_KEY}`;
+  try {
+    const response = await fetch("./industries.json");
+    if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
 
-    try {
-      let response = await fetch(url);
-      if (!response.ok)
-        throw new Error(`HTTP error! Status: ${response.status}`);
-
-      let data = await response.json();
-      console.log("FMP response for batch", batch, data);
-      if (!Array.isArray(data)) {
-        console.error("FMP returned non-array response:", data);
-        continue;
-      }
-      data.forEach((stock) => {
-        if (stock.symbol && stock.industry) {
-          industryMap[stock.symbol] = stock.industry;
-        }
-      });
-    } catch (error) {
-      console.error("Error fetching industry data from FMP:", error);
-    }
+    const data = await response.json();
+    symbolSet.forEach((symbol) => {
+      if (data[symbol]) industryMap[symbol] = data[symbol];
+    });
+  } catch (error) {
+    console.error("Error loading industries.json:", error);
   }
 
   return industryMap;
