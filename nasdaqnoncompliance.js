@@ -217,27 +217,32 @@ function populateIndustryDropdown(industryGroups) {
   const industryDropdown = document.getElementById("industryDropdown");
   if (!industryDropdown) return;
 
-  industryDropdown.innerHTML = `<option value="">Select Industry</option>`;
+  industryDropdown.innerHTML = "";
 
-  Object.keys(industryGroups).forEach((industry) => {
-    const option = document.createElement("option");
-    option.value = industry;
-    option.textContent = industry;
-    industryDropdown.appendChild(option);
-  });
-
-  industryDropdown.addEventListener("change", function () {
-    const selectedIndustry = this.value;
-    if (selectedIndustry) {
-      localStorage.setItem("selectedIndustry", selectedIndustry);
-      localStorage.setItem(
-        "filteredTickers",
-        JSON.stringify(industryGroups[selectedIndustry])
-      );
-      updateTableView(industryGroups[selectedIndustry]);
-    } else {
+  function applySelection() {
+    const checked = [...industryDropdown.querySelectorAll("input:checked")].map(cb => cb.value);
+    if (checked.length === 0) {
       resetTableView();
+      localStorage.removeItem("filteredTickers");
+    } else {
+      const combined = checked.flatMap(industry => industryGroups[industry] || []);
+      localStorage.setItem("filteredTickers", JSON.stringify(combined));
+      updateTableView(combined);
     }
+  }
+
+  Object.keys(industryGroups).sort().forEach((industry) => {
+    const label = document.createElement("label");
+    label.style.cssText = "display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = industry;
+    cb.addEventListener("change", applySelection);
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(`${industry} (${industryGroups[industry].length})`));
+    industryDropdown.appendChild(label);
   });
 }
 
